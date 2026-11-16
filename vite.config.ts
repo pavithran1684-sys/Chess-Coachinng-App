@@ -13,6 +13,9 @@ export default defineConfig({
         'https://app.useagent.org',
       ],
     },
+    proxy: {
+      '/api': 'http://127.0.0.1:3001',
+    },
   },
   resolve: {
     alias: {

@@ -1,6 +1,11 @@
-node_modules
-dist
-dist-ssr
+node_modules/
+dist/
+dist-ssr/
+data/
+screenshots/
+coverage/
+*.tsbuildinfo
+*.log
 *.local
 .env
 .env.*
