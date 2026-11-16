@@ -1,54 +1,35 @@
-import { CalendarDays } from 'lucide-react'
-import { dashboardSummary } from '@/data/dashboard'
-import { DashboardStats } from './components/DashboardStats'
-import { RecentActivity } from './components/RecentActivity'
-import { StudentOverview } from './components/StudentOverview'
-import { UpcomingClasses } from './components/UpcomingClasses'
+import { useEffect, useState } from 'react'
+import { Building2, UsersRound } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Feedback } from '@/components/ui/Feedback'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { useAuth } from '@/context/AuthContext'
+import { api } from '@/lib/api'
+import { ClassCalendar } from './ClassCalendar'
 
-function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
-}
+interface Summary { totalStudents: number; totalInstitutions: number }
 
 export function DashboardPage() {
-  const formattedDate = new Intl.DateTimeFormat('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date())
+  const { user } = useAuth()
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api<Summary>('/api/dashboard').then(setSummary).catch((reason) => setError(reason instanceof Error ? reason.message : 'Unable to load dashboard.'))
+  }, [])
 
   return (
     <div className="page-enter space-y-6">
-      <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <span className="h-px w-5 bg-gold-400" aria-hidden="true" />
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-300">Dashboard overview</p>
-          </div>
-          <h1 className="font-display text-[26px] font-semibold tracking-[-0.04em] text-white sm:text-[30px]">
-            {getGreeting()}, Coach<span className="text-gold-400">.</span>
-          </h1>
-          <p className="mt-2 text-xs leading-5 text-slate-400 sm:text-[13px]">
-            Here’s what’s happening across your coaching practice.
-          </p>
-        </div>
-        <div className="inline-flex w-fit items-center gap-2.5 rounded-xl border border-slate-400/10 bg-white/[0.025] px-3.5 py-2.5 text-[11px] font-medium text-slate-400">
-          <CalendarDays size={15} className="text-gold-400" aria-hidden="true" />
-          {formattedDate}
-        </div>
-      </section>
-
-      <DashboardStats summary={dashboardSummary} />
-
-      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]" aria-label="Schedule and activity">
-        <UpcomingClasses />
-        <RecentActivity />
-      </section>
-
-      <StudentOverview />
+      <PageHeader eyebrow="Coach dashboard" title={`Welcome back, ${user?.name ?? 'Coach'}.`} description="Manage your institutions and keep each scheduled class on track." />
+      <Feedback message={error} />
+      {!summary ? <LoadingState label="Loading overview…" /> : (
+        <section className="grid gap-4 sm:grid-cols-2" aria-label="Coaching overview">
+          <Card className="flex items-center gap-4 p-5 sm:p-6"><span className="flex h-11 w-11 items-center justify-center rounded-xl border border-gold-400/20 bg-gold-400/10 text-gold-300"><UsersRound size={20} /></span><div><p className="text-xs font-medium text-slate-400">Total Students</p><p className="mt-1 font-display text-3xl font-semibold tracking-tight text-white">{summary.totalStudents}</p><p className="mt-1 text-[10px] text-slate-600">Live student records</p></div></Card>
+          <Card className="flex items-center gap-4 p-5 sm:p-6"><span className="flex h-11 w-11 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-300"><Building2 size={20} /></span><div><p className="text-xs font-medium text-slate-400">Total Institutions</p><p className="mt-1 font-display text-3xl font-semibold tracking-tight text-white">{summary.totalInstitutions}</p><p className="mt-1 text-[10px] text-slate-600">Live institution records</p></div></Card>
+        </section>
+      )}
+      <ClassCalendar />
     </div>
   )
 }

@@ -2,12 +2,13 @@ import { Link } from 'react-router-dom'
 
 interface BrandProps {
   compact?: boolean
+  to?: string
 }
 
-export function Brand({ compact = false }: BrandProps) {
+export function Brand({ compact = false, to = '/dashboard' }: BrandProps) {
   return (
     <Link
-      to="/dashboard"
+      to={to}
       className="group inline-flex shrink-0 items-center gap-3 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
       aria-label="ChessDesk dashboard"
     >
