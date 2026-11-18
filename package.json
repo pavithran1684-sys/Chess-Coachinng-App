@@ -14,7 +14,7 @@
     "build": "tsc -b && vite build",
     "start": "NODE_ENV=production node server/index.js",
     "lint": "eslint .",
-    "test": "node --test src/lib/auth.test.ts && node server/test-workflow.mjs",
+    "test": "node --test src/lib/auth.test.ts src/lib/api.test.ts && node server/test-workflow.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

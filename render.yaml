@@ -1,0 +1,21 @@
+# Deploy this repository as one Node Web Service so the same process serves
+# the React application and /api authentication/application routes.
+services:
+  - type: web
+    name: chessdesk-app
+    runtime: node
+    plan: 0.5c-512mb
+    numInstances: 1
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_PATH
+        value: /data/chessdesk.db
+      - key: UPLOAD_DIR
+        value: /data/uploads
+    disk:
+      name: chessdesk-data
+      mountPath: /data
+      sizeGB: 1

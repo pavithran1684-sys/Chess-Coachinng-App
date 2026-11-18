@@ -139,9 +139,9 @@ If the repository already has a `main` branch, pull or clone it first and copy t
 
 ### 1. Create the web service
 
-1. Sign in to [Render](https://dashboard.render.com/) and select **New + → Web Service**.
-2. Connect your GitHub account if prompted, then select the ChessDesk repository.
-3. Choose a name, region, and the `main` branch. Render should detect the **Node** runtime. `package.json` pins the verified Node.js 24 and npm 11 major versions.
+1. Sign in to [Render](https://dashboard.render.com/) and select **New + → Web Service**. Do not select **Static Site**, and do not overwrite or delete any existing service.
+2. Connect your GitHub account if prompted, then select `pavithran1684-sys/Chess-Coaching-App`.
+3. Use the unique service name `chessdesk-app`, choose a region, and select the `backend-dev` branch. Render should detect the **Node** runtime. `package.json` pins the verified Node.js 24 and npm 11 major versions.
 4. Enter these commands exactly:
 
    | Setting | Value |
@@ -150,6 +150,8 @@ If the repository already has a `main` branch, pull or clone it first and copy t
    | Start command | `npm start` |
 
 5. Select an instance type that supports persistent disks.
+
+**Do not deploy ChessDesk as a Static Site.** A static frontend cannot execute the Express authentication/API routes and can return `index.html` for `/api/auth/login`. The frontend and backend must run together through `npm start` in the same Node Web Service. A `render.yaml` Blueprint is included as an alternative to manual setup; review its paid `0.5c-512mb` compute plan and persistent-disk settings before deploying because they incur charges. If the Blueprint preview shows an existing service being updated instead of a new `chessdesk-app` service being created, stop and choose another unused name.
 
 ### 2. Attach persistent storage
 
