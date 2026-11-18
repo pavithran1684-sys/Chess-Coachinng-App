@@ -33,3 +33,17 @@ export function requireAuthUser(value: unknown): AuthUser {
   if (!user) throw new Error('ChessDesk received an incomplete account response. Please try signing in again.')
   return user
 }
+
+/** Accept the canonical envelope and a legacy direct-user response. */
+export function parseAuthUserResponse(response: unknown): AuthUser | null {
+  if (typeof response === 'object' && response !== null && 'user' in response) {
+    return parseAuthUser((response as { user: unknown }).user)
+  }
+  return parseAuthUser(response)
+}
+
+export function requireAuthUserFromResponse(response: unknown): AuthUser {
+  const user = parseAuthUserResponse(response)
+  if (!user) throw new Error('ChessDesk received an incomplete account response. Please try signing in again.')
+  return user
+}

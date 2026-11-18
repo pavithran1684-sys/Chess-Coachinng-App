@@ -23,9 +23,20 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (response.status === 204) return undefined as T
 
   const contentType = response.headers.get('content-type') ?? ''
-  const payload = contentType.includes('application/json')
-    ? await response.json()
-    : await response.text()
+  const isJson = contentType.includes('application/json')
+  let payload: unknown
+  if (isJson) {
+    try {
+      payload = await response.json()
+    } catch {
+      throw new ApiError('The ChessDesk API returned unreadable JSON. Check that the frontend and backend were deployed together.', 502)
+    }
+  } else {
+    payload = await response.text()
+    if (response.ok) {
+      throw new ApiError('The ChessDesk API returned a web page instead of JSON data. Deploy ChessDesk as a Node Web Service with npm start, not as a static frontend.', 502)
+    }
+  }
 
   if (!response.ok) {
     const message = typeof payload === 'object' && payload && 'error' in payload

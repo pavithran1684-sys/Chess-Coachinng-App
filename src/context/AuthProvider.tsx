@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '@/lib/api'
-import { parseAuthUser, requireAuthUser } from '@/lib/auth'
+import { parseAuthUserResponse, requireAuthUserFromResponse } from '@/lib/auth'
 import type { AuthUser, UserRole } from '@/types'
 import { AuthContext } from './AuthContext'
 
@@ -13,8 +13,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
-    const sessionRequest = api<{ user: unknown } | null>('/api/auth/me')
-      .then((result) => parseAuthUser(result?.user))
+    const sessionRequest = api<unknown>('/api/auth/me')
+      .then((result) => parseAuthUserResponse(result))
       .catch(() => null)
     const statusRequest = api<{ coachSetupRequired?: unknown } | null>('/api/auth/status')
       .then((result) => result?.coachSetupRequired === true)
@@ -40,11 +40,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (role: UserRole, identifier: string, password: string) => {
     try {
-      const result = await api<{ user: unknown } | null>('/api/auth/login', {
+      const result = await api<unknown>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ role, identifier, password }),
       })
-      const authenticatedUser = requireAuthUser(result?.user)
+      const authenticatedUser = requireAuthUserFromResponse(result)
       if (authenticatedUser.role !== role) throw new Error('The account role does not match the selected login option.')
       setUser(authenticatedUser)
       return authenticatedUser
@@ -56,11 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setup = useCallback(async (name: string, email: string, password: string) => {
     try {
-      const result = await api<{ user: unknown } | null>('/api/auth/setup', {
+      const result = await api<unknown>('/api/auth/setup', {
         method: 'POST',
         body: JSON.stringify({ name, email, password }),
       })
-      const authenticatedUser = requireAuthUser(result?.user)
+      const authenticatedUser = requireAuthUserFromResponse(result)
       if (authenticatedUser.role !== 'coach') throw new Error('The initial account was not returned as a coach account.')
       setUser(authenticatedUser)
       setCoachSetupRequired(false)

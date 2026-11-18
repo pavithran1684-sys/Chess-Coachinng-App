@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseAuthUser, requireAuthUser } from './auth.ts'
+import { parseAuthUser, requireAuthUser, requireAuthUserFromResponse } from './auth.ts'
 
 const coach = { id: 1, role: 'coach', name: 'Test Coach', email: 'coach@test.local' }
 const student = {
@@ -24,4 +24,12 @@ test('valid coach and student account responses retain their server-assigned rol
   assert.deepEqual(parseAuthUser(student), student)
   assert.deepEqual(requireAuthUser(coach), coach)
   assert.deepEqual(requireAuthUser(student), student)
+})
+
+test('canonical envelopes and legacy direct users use the same validated contract', () => {
+  for (const response of [coach, { user: coach }]) assert.deepEqual(requireAuthUserFromResponse(response), coach)
+  for (const response of [student, { user: student }]) assert.deepEqual(requireAuthUserFromResponse(response), student)
+  for (const response of [undefined, null, {}, { user: undefined }, '<!doctype html>']) {
+    assert.throws(() => requireAuthUserFromResponse(response), /incomplete account response/)
+  }
 })
