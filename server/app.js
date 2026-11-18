@@ -14,6 +14,7 @@ import {
   sessionMiddleware,
 } from './auth.js'
 import { createCoachRouter, createNotesFileHandler } from './coach-routes.js'
+import { createInitialCoach } from './coach-account.js'
 import { createDatabase } from './db.js'
 import { createStudentRouter } from './student-routes.js'
 import { httpError } from './validation.js'
@@ -42,6 +43,20 @@ export function createApp(options = {}) {
   const api = express.Router()
   api.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
+  api.get('/auth/status', (_req, res) => {
+    const coachExists = Boolean(db.prepare('SELECT 1 FROM coaches LIMIT 1').get())
+    res.json({ coachSetupRequired: !coachExists })
+  })
+
+  api.post('/auth/setup', (req, res) => {
+    const account = createInitialCoach(db, req.body)
+    // Replace any old/anonymous cookie and bind the new session to the coach
+    // returned by the same transaction that created the account.
+    destroySession(db, req, res, production)
+    createSession(db, res, 'coach', account.id, production)
+    res.status(201).json({ user: publicCoach(account) })
+  })
+
   api.post('/auth/login', (req, res) => {
     const role = req.body?.role
     const identifier = typeof req.body?.identifier === 'string' ? req.body.identifier.trim() : ''
@@ -49,6 +64,9 @@ export function createApp(options = {}) {
     if (role !== 'coach' && role !== 'student') throw httpError(400, 'Select coach or student login.')
     if (!identifier || identifier.length > 160 || !candidatePassword || candidatePassword.length > 128) {
       throw httpError(401, 'Invalid login details. Please try again.')
+    }
+    if (role === 'coach' && !db.prepare('SELECT 1 FROM coaches LIMIT 1').get()) {
+      throw httpError(409, 'No coach account exists yet. Complete the first-time Coach / Admin setup.')
     }
 
     let account

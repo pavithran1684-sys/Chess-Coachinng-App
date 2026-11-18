@@ -57,7 +57,7 @@ export function sessionMiddleware(db) {
     if (session.role === 'coach') {
       const coach = db.prepare('SELECT id, name, email FROM coaches WHERE id = ?').get(session.user_id)
       if (coach) req.user = publicCoach(coach)
-    } else {
+    } else if (session.role === 'student') {
       const student = db.prepare(`
         SELECT s.id, s.name, s.username, s.institution_id, i.name AS institution_name
         FROM students s JOIN institutions i ON i.id = s.institution_id

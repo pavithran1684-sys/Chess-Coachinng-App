@@ -7,13 +7,10 @@ import { createApp } from './app.js'
 const tempRoot = path.join(os.tmpdir(), 'opencode')
 fs.mkdirSync(tempRoot, { recursive: true })
 const tempDir = fs.mkdtempSync(path.join(tempRoot, 'chessdesk-workflow-'))
-const { app, close } = createApp({
+const { app, db, close } = createApp({
   databasePath: path.join(tempDir, 'test.db'),
   uploadDir: path.join(tempDir, 'uploads'),
   production: false,
-  coachEmail: 'coach@test.local',
-  coachPassword: 'Coach@Test123',
-  coachName: 'Workflow Test Coach',
 })
 const server = app.listen(0, '127.0.0.1')
 await new Promise((resolve) => server.once('listening', resolve))
@@ -65,11 +62,33 @@ const anonymous = new TestClient()
 
 try {
   expectStatus(await anonymous.request('/api/health'), 200, 'Public health check')
+  const initialStatus = expectStatus(await anonymous.request('/api/auth/status'), 200, 'Empty installation status')
+  assert.equal(initialStatus.coachSetupRequired, true)
   expectStatus(await anonymous.request('/api/institutions'), 401, 'Unauthenticated administration denied')
+  expectStatus(await coach.request('/api/auth/setup', {
+    method: 'POST', body: { name: 'Workflow Test Coach', email: 'coach@test.local', password: 'TooShort1' },
+  }), 400, 'Weak initial coach password rejected')
+  const setup = expectStatus(await coach.request('/api/auth/setup', {
+    method: 'POST', body: { name: 'Workflow Test Coach', email: 'coach@test.local', password: 'Coach@Test123' },
+  }), 201, 'First-time coach setup')
+  assert.equal(setup.user.role, 'coach')
+  assert.equal((await coach.request('/api/auth/me')).body.user.name, 'Workflow Test Coach')
+  const storedCoach = db.prepare('SELECT * FROM coaches WHERE email = ?').get('coach@test.local')
+  assert.ok(storedCoach)
+  assert.notEqual(storedCoach.password_hash, 'Coach@Test123')
+  assert.match(storedCoach.password_hash, /^\$2[aby]\$/)
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM coaches').get().count, 1)
+  assert.equal((await anonymous.request('/api/auth/status')).body.coachSetupRequired, false)
+  expectStatus(await anonymous.request('/api/auth/setup', {
+    method: 'POST', body: { name: 'Duplicate Coach', email: 'duplicate@test.local', password: 'Duplicate@Test123' },
+  }), 409, 'Second initial setup denied')
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM coaches').get().count, 1)
+  expectStatus(await coach.request('/api/auth/logout', { method: 'POST' }), 204, 'Coach logout before login tests')
   expectStatus(await coach.login('coach', 'coach@test.local', 'wrong-password'), 401, 'Incorrect coach password rejected')
   const coachLogin = expectStatus(await coach.login('coach', 'coach@test.local', 'Coach@Test123'), 200, 'Coach login')
   assert.equal(coachLogin.user.role, 'coach')
-  assert.equal((await coach.request('/api/auth/me')).body.user.name, 'Workflow Test Coach')
+  expectStatus(await studentOne.login('student', 'missing.student', 'MissingStudent123'), 401, 'Missing student account rejected')
+  console.log('✓ First-time coach setup, password hashing, duplicate prevention, and valid/invalid login passed')
 
   // TEST 1: Institution creation, live counts, and duplicate protection.
   const alpha = expectStatus(await coach.request('/api/institutions', {
@@ -102,7 +121,12 @@ try {
   assert.equal(students.length, 2)
   assert.equal((await coach.request('/api/dashboard')).body.totalStudents, 2)
   assert.equal((await coach.request('/api/institutions')).body[0].studentCount, 2)
-  expectStatus(await studentOne.login('student', firstStudent.username, firstPassword), 200, 'TEST 2 first student login')
+  const storedFirstStudent = db.prepare('SELECT * FROM students WHERE id = ?').get(firstStudent.id)
+  assert.equal(storedFirstStudent.institution_id, alpha.id)
+  assert.notEqual(storedFirstStudent.password_hash, firstPassword)
+  expectStatus(await studentOne.login('student', firstStudent.username, 'incorrect-password'), 401, 'TEST 2 incorrect student password')
+  const firstStudentLogin = expectStatus(await studentOne.login('student', firstStudent.username, firstPassword), 200, 'TEST 2 first student login')
+  assert.equal(firstStudentLogin.user.role, 'student')
   expectStatus(await studentTwo.login('student', secondStudent.name, secondPassword), 200, 'TEST 2 name-based student login')
   console.log('✓ TEST 2: Two unique student accounts are linked to Alpha and Omega')
 

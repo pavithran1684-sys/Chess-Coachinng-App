@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import bcrypt from 'bcryptjs'
 import Database from 'better-sqlite3'
+import { createInitialCoach } from './coach-account.js'
 
 const schema = `
   CREATE TABLE IF NOT EXISTS coaches (
@@ -126,7 +126,6 @@ export function now() {
 export function createDatabase(options = {}) {
   const databasePath = options.databasePath || process.env.DATABASE_PATH || path.resolve('data/chessdesk.db')
   const uploadDir = path.resolve(options.uploadDir || process.env.UPLOAD_DIR || 'data/uploads')
-  const production = options.production ?? process.env.NODE_ENV === 'production'
 
   if (databasePath !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true })
   fs.mkdirSync(uploadDir, { recursive: true })
@@ -138,35 +137,28 @@ export function createDatabase(options = {}) {
   db.exec(schema)
 
   const existingCoach = db.prepare('SELECT id FROM coaches ORDER BY id LIMIT 1').get()
-  if (!existingCoach) {
-    const email = String(options.coachEmail || process.env.COACH_EMAIL || (production ? '' : 'coach@chessdesk.local')).trim().toLowerCase()
-    const password = String(options.coachPassword || process.env.COACH_PASSWORD || (production ? '' : 'Coach@123'))
-    const name = String(options.coachName || process.env.COACH_NAME || 'Chess Coach').trim()
+  const configuredEmail = options.coachEmail ?? process.env.COACH_EMAIL ?? ''
+  const configuredPassword = options.coachPassword ?? process.env.COACH_PASSWORD ?? ''
+  const hasConfiguredEmail = typeof configuredEmail === 'string' && configuredEmail.trim().length > 0
+  const hasConfiguredPassword = typeof configuredPassword === 'string' && configuredPassword.trim().length > 0
 
-    if (!email || !password) {
+  // Environment provisioning remains available for automated deployments, but
+  // an empty database can also start normally and use the one-time web setup.
+  if (!existingCoach && (hasConfiguredEmail || hasConfiguredPassword)) {
+    if (!hasConfiguredEmail || !hasConfiguredPassword) {
       db.close()
-      throw new Error('COACH_EMAIL and COACH_PASSWORD are required to create the initial production coach account.')
+      throw new Error('Set both COACH_EMAIL and COACH_PASSWORD to provision a coach, or leave both unset to use first-time web setup.')
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    try {
+      createInitialCoach(db, {
+        email: configuredEmail,
+        password: configuredPassword,
+        name: options.coachName || process.env.COACH_NAME || 'Chess Coach',
+      })
+    } catch (error) {
       db.close()
-      throw new Error('COACH_EMAIL must be a valid email address.')
+      throw error
     }
-    if (password.length < (production ? 12 : 8) || Buffer.byteLength(password) > 72) {
-      db.close()
-      throw new Error(`COACH_PASSWORD must be at least ${production ? 12 : 8} characters and no more than 72 UTF-8 bytes.`)
-    }
-
-    db.prepare(`
-      INSERT INTO coaches (name, email, password_hash, title, bio, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      name || 'Chess Coach',
-      email,
-      bcrypt.hashSync(password, 12),
-      'Chess Coach & Mentor',
-      'I help students build strong chess fundamentals, think independently, and grow in confidence through structured lessons and thoughtful feedback.',
-      now(),
-    )
   }
 
   return { db, uploadDir }
