@@ -4,7 +4,9 @@ import type { AuthUser, UserRole } from '@/types'
 export interface AuthContextValue {
   user: AuthUser | null
   isLoading: boolean
+  coachSetupRequired: boolean
   login: (role: UserRole, identifier: string, password: string) => Promise<AuthUser>
+  setup: (name: string, email: string, password: string) => Promise<AuthUser>
   logout: () => Promise<void>
 }
 

@@ -1,22 +1,30 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
+import { parseAuthUser, requireAuthUser } from '@/lib/auth'
 import type { AuthUser, UserRole } from '@/types'
 import { AuthContext } from './AuthContext'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [coachSetupRequired, setCoachSetupRequired] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     let active = true
-    api<{ user: AuthUser | null }>('/api/auth/me')
-      .then((result) => {
-        if (active) setUser(result.user)
-      })
-      .catch(() => {
-        if (active) setUser(null)
+    const sessionRequest = api<{ user: unknown } | null>('/api/auth/me')
+      .then((result) => parseAuthUser(result?.user))
+      .catch(() => null)
+    const statusRequest = api<{ coachSetupRequired?: unknown } | null>('/api/auth/status')
+      .then((result) => result?.coachSetupRequired === true)
+      .catch(() => false)
+
+    void Promise.all([sessionRequest, statusRequest])
+      .then(([restoredUser, setupRequired]) => {
+        if (!active) return
+        setUser(restoredUser)
+        setCoachSetupRequired(setupRequired)
       })
       .finally(() => {
         if (active) setIsLoading(false)
@@ -31,12 +39,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (role: UserRole, identifier: string, password: string) => {
-    const result = await api<{ user: AuthUser }>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ role, identifier, password }),
-    })
-    setUser(result.user)
-    return result.user
+    try {
+      const result = await api<{ user: unknown } | null>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ role, identifier, password }),
+      })
+      const authenticatedUser = requireAuthUser(result?.user)
+      if (authenticatedUser.role !== role) throw new Error('The account role does not match the selected login option.')
+      setUser(authenticatedUser)
+      return authenticatedUser
+    } catch (reason) {
+      if (role === 'coach' && reason instanceof ApiError && reason.status === 409) setCoachSetupRequired(true)
+      throw reason
+    }
+  }, [])
+
+  const setup = useCallback(async (name: string, email: string, password: string) => {
+    try {
+      const result = await api<{ user: unknown } | null>('/api/auth/setup', {
+        method: 'POST',
+        body: JSON.stringify({ name, email, password }),
+      })
+      const authenticatedUser = requireAuthUser(result?.user)
+      if (authenticatedUser.role !== 'coach') throw new Error('The initial account was not returned as a coach account.')
+      setUser(authenticatedUser)
+      setCoachSetupRequired(false)
+      return authenticatedUser
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 409) setCoachSetupRequired(false)
+      throw reason
+    }
   }, [])
 
   const logout = useCallback(async () => {
@@ -48,7 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [navigate])
 
-  const value = useMemo(() => ({ user, isLoading, login, logout }), [user, isLoading, login, logout])
+  const value = useMemo(
+    () => ({ user, isLoading, coachSetupRequired, login, setup, logout }),
+    [user, isLoading, coachSetupRequired, login, setup, logout],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
